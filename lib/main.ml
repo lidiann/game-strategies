@@ -30,8 +30,23 @@ let non_win =
     ]
 
 let print_game (game : Game.t) =
-  ignore game;
-  print_endline ""
+  let board_length = Game_kind.board_length game.game_kind in
+  let board = game.board in
+  let pieces_list =
+    List.init board_length ~f:(fun row ->
+        List.init board_length ~f:(fun column ->
+            match Map.find board { row; column } with
+            | None -> " "
+            | Some piece -> Piece.to_string piece))
+  in
+
+  List.iteri pieces_list ~f:(fun row col_list ->
+      List.iteri col_list ~f:(fun col piece ->
+          print_string (piece ^ " ");
+          if not (Int.equal col (board_length - 1)) then print_string "| ");
+      print_string "\n";
+      (* Fix bar to seperate rows to work for either omok or ttt *)
+      if not (Int.equal row (board_length - 1)) then print_endline "---------")
 
 let%expect_test "print_win_for_x" =
   print_game win_for_x;
