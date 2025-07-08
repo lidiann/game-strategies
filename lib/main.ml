@@ -109,19 +109,23 @@ let%expect_test "available_moves_non_win" =
 
 (* Exercise 2 *)
 let evaluate (game : Game.t) : Evaluation.t =
-  let rec search_for_game_eval  ~direction (until_win : int) (position : Position.t) (game : Game.t)
-      : Evaluation.t =
-      ignore game;
-      ignore until_win;
-      ignore direction; 
+  let rec search_for_game_eval ~(direction : Position.t -> Position.t)
+      (until_win : int) (position : Position.t) (game : Game.t) : Evaluation.t =
+    ignore game;
+    ignore until_win;
+    ignore direction;
     match Position.in_bounds position ~game_kind:game.game_kind with
     | false -> Illegal_move
     | true ->
         Game_continues (* We want to check neighboring to find potential wins *)
   in
-  (* Following line is example of calling above rec function *)
-  search_for_game_eval ~direction:Position.left {Position.row: 0; Position.column: 0} game  game.game_kind 
-(* Has someone put something out of bounds, won (if so who?),   *)
+  search_for_game_eval ~direction:Position.left
+    (Game_kind.win_length game.game_kind)
+    { Position.row = 0; Position.column = 0 }
+    game
+
+(* Following line is example of calling above rec function *)
+(* search_for_game_eval ~direction:Position.left {Position.row: 0; Position.column: 0} game  game.game_kind  *)
 
 (* Exercise 3 *)
 let winning_moves ~(me : Piece.t) (game : Game.t) : Position.t list =
