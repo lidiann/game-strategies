@@ -10,3 +10,6 @@ let to_string_hum game_kind =
 
 let board_length = function Tic_tac_toe -> 3 | Omok -> 15
 let win_length = function Tic_tac_toe -> 3 | Omok -> 5
+
+let row_separator t =
+  String.concat (List.init (3 * board_length t) ~f:(fun _ -> "-"))

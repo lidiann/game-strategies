@@ -31,22 +31,33 @@ let non_win =
 
 let print_game (game : Game.t) =
   let board_length = Game_kind.board_length game.game_kind in
-  let board = game.board in
-  let pieces_list =
-    List.init board_length ~f:(fun row ->
-        List.init board_length ~f:(fun column ->
-            match Map.find board { row; column } with
-            | None -> " "
-            | Some piece -> Piece.to_string piece))
-  in
-
+  let pieces_list = Game.get_2D_piece_list game in
+  (* There is a lot wrong *)
   List.iteri pieces_list ~f:(fun row col_list ->
+      List.iteri col_list
+        ~f:(fun column piece ->
+          match piece with
+          | None ->
+              print_string "  ";
+              if not (Int.equal column (board_length - 1)) then
+                print_string "| "
+          | Some piece ->
+              print_string (Piece.to_string piece ^ " ");
+              if not (Int.equal column (board_length - 1)) then
+                print_string "| ")
+        print_string "\n";
+      (* Fix bar to seperate rows to work for either omok or ttt *)
+      if not (Int.equal row (board_length - 1)) then
+        print_endline (Game_kind.row_separator game.game_kind))
+
+(* List.iteri pieces_list ~f:(fun row col_list ->
       List.iteri col_list ~f:(fun col piece ->
           print_string (piece ^ " ");
           if not (Int.equal col (board_length - 1)) then print_string "| ");
       print_string "\n";
       (* Fix bar to seperate rows to work for either omok or ttt *)
-      if not (Int.equal row (board_length - 1)) then print_endline "---------")
+      if not (Int.equal row (board_length - 1)) then
+        print_endline (Game_kind.row_separator game.game_kind)) *)
 
 let%expect_test "print_win_for_x" =
   print_game win_for_x;
@@ -74,13 +85,45 @@ let%expect_test "print_non_win" =
 
 (* Exercise 1 *)
 let available_moves (game : Game.t) : Position.t list =
-  ignore game;
-  failwith "Implement me!"
+  (* let board_length = Game_kind.board_length game.game_kind in *)
+  let pieces_list = Game.get_2D_piece_list game in
+  (* Essentially like Map.find on board. *)
+  List.concat
+    (List.mapi pieces_list ~f:(fun row col_list ->
+         List.filter_mapi col_list ~f:(fun column piece ->
+             match piece with
+             (* Should match on Piece variant after fixes *)
+             | " " -> (Some { row; column } : Position.t option)
+             | _ -> None)))
+
+let%expect_test "available_moves_win_for_x" =
+  let test_available_moves = available_moves win_for_x in
+  print_endline
+    (List.to_string
+       ~f:(fun position -> Position.to_string position)
+       test_available_moves);
+  [%expect {|
+  ()
+  |}];
+  return ()
+
+let%expect_test "available_moves_non_win" =
+  let test_available_moves = available_moves non_win in
+  print_endline
+    (List.to_string
+       ~f:(fun position -> Position.to_string position)
+       test_available_moves);
+  [%expect
+    {|
+    ("((row 0) (column 1))""((row 0) (column 2))""((row 1) (column 1))""((row 1) (column 2))""((row 2) (column 1))")
+  |}];
+  return ()
 
 (* Exercise 2 *)
 let evaluate (game : Game.t) : Evaluation.t =
   ignore game;
-  failwith "Implement me!"
+  failwith "DO this"
+(* Has someone put something out of bounds, won (if so who?),   *)
 
 (* Exercise 3 *)
 let winning_moves ~(me : Piece.t) (game : Game.t) : Position.t list =

@@ -12,3 +12,7 @@ val board_length : t -> int
 val win_length : t -> int
 (** [win_length] returns the winning length of the board. 3 for [ Tic_tac_toe ]
     and 5 for [Omok]. *)
+
+val row_separator : t -> string
+(** [row_separator] returns the row separator for printing the board, it's
+    dependent on Game_kind. *)
