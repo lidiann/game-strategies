@@ -32,10 +32,8 @@ let non_win =
 let print_game (game : Game.t) =
   let board_length = Game_kind.board_length game.game_kind in
   let pieces_list = Game.get_2D_piece_list game in
-  (* There is a lot wrong *)
   List.iteri pieces_list ~f:(fun row col_list ->
-      List.iteri col_list
-        ~f:(fun column piece ->
+      List.iteri col_list ~f:(fun column piece ->
           match piece with
           | None ->
               print_string "  ";
@@ -44,20 +42,10 @@ let print_game (game : Game.t) =
           | Some piece ->
               print_string (Piece.to_string piece ^ " ");
               if not (Int.equal column (board_length - 1)) then
-                print_string "| ")
-        print_string "\n";
-      (* Fix bar to seperate rows to work for either omok or ttt *)
+                print_string "| ");
+      print_string "\n";
       if not (Int.equal row (board_length - 1)) then
         print_endline (Game_kind.row_separator game.game_kind))
-
-(* List.iteri pieces_list ~f:(fun row col_list ->
-      List.iteri col_list ~f:(fun col piece ->
-          print_string (piece ^ " ");
-          if not (Int.equal col (board_length - 1)) then print_string "| ");
-      print_string "\n";
-      (* Fix bar to seperate rows to work for either omok or ttt *)
-      if not (Int.equal row (board_length - 1)) then
-        print_endline (Game_kind.row_separator game.game_kind)) *)
 
 let%expect_test "print_win_for_x" =
   print_game win_for_x;
@@ -93,8 +81,8 @@ let available_moves (game : Game.t) : Position.t list =
          List.filter_mapi col_list ~f:(fun column piece ->
              match piece with
              (* Should match on Piece variant after fixes *)
-             | " " -> (Some { row; column } : Position.t option)
-             | _ -> None)))
+             | None -> (Some { row; column } : Position.t option)
+             | Some X | Some O -> None)))
 
 let%expect_test "available_moves_win_for_x" =
   let test_available_moves = available_moves win_for_x in
@@ -121,8 +109,18 @@ let%expect_test "available_moves_non_win" =
 
 (* Exercise 2 *)
 let evaluate (game : Game.t) : Evaluation.t =
-  ignore game;
-  failwith "DO this"
+  let rec search_for_game_eval  ~direction (until_win : int) (position : Position.t) (game : Game.t)
+      : Evaluation.t =
+      ignore game;
+      ignore until_win;
+      ignore direction; 
+    match Position.in_bounds position ~game_kind:game.game_kind with
+    | false -> Illegal_move
+    | true ->
+        Game_continues (* We want to check neighboring to find potential wins *)
+  in
+  (* Following line is example of calling above rec function *)
+  search_for_game_eval ~direction:Position.left {Position.row: 0; Position.column: 0} game  game.game_kind 
 (* Has someone put something out of bounds, won (if so who?),   *)
 
 (* Exercise 3 *)
