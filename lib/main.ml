@@ -107,25 +107,74 @@ let%expect_test "available_moves_non_win" =
   |}];
   return ()
 
+let get_next_piece (game : Game.t) direction position =
+  let win_length = Game_kind.win_length game.game_kind in
+  List.init win_length ~f:(fun until_win ->
+      let rec move_in dir posn until_win =
+        if Int.equal until_win 0 then posn
+        else move_in dir (dir posn) (until_win - 1)
+      in
+      let new_posn = move_in direction position until_win in
+      Map.find game.board new_posn)
+
+let check_directions (game : Game.t) position (cur_piece : Piece.t) :
+    Evaluation.t =
+  List.fold Position.all_offsets
+    ~init:(Game_continues : Evaluation.t)
+    ~f:(fun eval direction ->
+      match eval with
+      | Illegal_move -> Illegal_move
+      | Game_over piece -> Game_over piece
+      | Game_continues -> (
+          match Position.in_bounds position ~game_kind:game.game_kind with
+          | false -> Illegal_move
+          | true -> (
+              let next_pieces = get_next_piece game direction position in
+              match
+                List.for_all next_pieces ~f:(fun next_piece ->
+                    match next_piece with
+                    | None -> false
+                    | Some nxt_piece -> Piece.equal nxt_piece cur_piece)
+              with
+              | true -> Game_over { winner = Some cur_piece }
+              | false -> Game_continues)))
+
 (* Exercise 2 *)
 let evaluate (game : Game.t) : Evaluation.t =
-  let rec search_for_game_eval ~(direction : Position.t -> Position.t)
-      (until_win : int) (position : Position.t) (game : Game.t) : Evaluation.t =
-    ignore game;
-    ignore until_win;
-    ignore direction;
-    match Position.in_bounds position ~game_kind:game.game_kind with
-    | false -> Illegal_move
-    | true ->
-        Game_continues (* We want to check neighboring to find potential wins *)
+  let result =
+    Map.fold game.board
+      ~init:(Game_continues : Evaluation.t)
+      ~f:(fun ~key:position ~data:piece game_eval ->
+        match game_eval with
+        | Illegal_move -> Illegal_move
+        | Game_over piece -> Game_over piece
+        | Game_continues -> check_directions game position piece)
   in
-  search_for_game_eval ~direction:Position.left
-    (Game_kind.win_length game.game_kind)
-    { Position.row = 0; Position.column = 0 }
-    game
 
-(* Following line is example of calling above rec function *)
-(* search_for_game_eval ~direction:Position.left {Position.row: 0; Position.column: 0} game  game.game_kind  *)
+  match
+    Int.equal (Map.length game.board) (Game_kind.board_size game.game_kind)
+  with
+  | true -> (
+      match result with
+      | Game_continues -> Game_over { winner = None }
+      | Illegal_move | Game_over _ -> result)
+  | false -> result
+
+let%expect_test "evaluate_non_win" =
+  let is_over = evaluate non_win in
+  print_s (Evaluation.sexp_of_t is_over);
+  [%expect {|
+    Game_continues
+  |}];
+  return ()
+
+let%expect_test "evaluate_win_for_x" =
+  let is_over = evaluate win_for_x in
+  print_s (Evaluation.sexp_of_t is_over);
+  [%expect {|
+    (Game_over (winner (X)))
+  |}];
+  return ()
 
 (* Exercise 3 *)
 let winning_moves ~(me : Piece.t) (game : Game.t) : Position.t list =

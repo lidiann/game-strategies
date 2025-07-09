@@ -9,5 +9,6 @@ let to_string_hum game_kind =
   |> String.map ~f:(function '_' -> ' ' | x -> x)
 
 let board_length = function Tic_tac_toe -> 3 | Omok -> 15
+let board_size t = board_length t * board_length t
 let win_length = function Tic_tac_toe -> 3 | Omok -> 5
 let row_separator t = String.init (3 * board_length t) ~f:(fun _ -> '-')
