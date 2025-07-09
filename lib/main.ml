@@ -119,7 +119,7 @@ let get_next_piece (game : Game.t) direction position =
 
 let check_directions (game : Game.t) position (cur_piece : Piece.t) :
     Evaluation.t =
-  List.fold Position.all_offsets
+  List.fold Position.some_offsets
     ~init:(Game_continues : Evaluation.t)
     ~f:(fun eval direction ->
       match eval with
@@ -178,15 +178,60 @@ let%expect_test "evaluate_win_for_x" =
 
 (* Exercise 3 *)
 let winning_moves ~(me : Piece.t) (game : Game.t) : Position.t list =
-  ignore me;
-  ignore game;
-  failwith "Implement me!"
+  (* For moves in available_moves, if added to game.board they give Game_over Some me, add to list. So, filter available moves for if they give Game_over {winner=Some me} *)
+  let available_moves = available_moves game in
+  List.filter available_moves ~f:(fun position ->
+      let potential_board = Map.add_exn game.board ~key:position ~data:me in
+      match
+        evaluate { game_kind = game.game_kind; board = potential_board }
+      with
+      | Illegal_move | Game_continues -> false
+      | Game_over { winner = piece } -> (
+          match piece with None -> false | Some piece -> Piece.equal me piece))
+
+let%expect_test "moves_win_for_x" =
+  let winning_moves = winning_moves ~me:X win_for_x in
+  List.iter winning_moves ~f:(fun position ->
+      print_endline (Position.to_string position));
+  [%expect {|
+  |}];
+  return ()
+
+let%expect_test "moves_non_win" =
+  let winning_moves = winning_moves ~me:X non_win in
+  List.iter winning_moves ~f:(fun position ->
+      print_endline (Position.to_string position));
+  [%expect {|
+  ((row 1) (column 1))
+  |}];
+  return ()
 
 (* Exercise 4 *)
 let losing_moves ~(me : Piece.t) (game : Game.t) : Position.t list =
-  ignore me;
-  ignore game;
-  failwith "Implement me!"
+  let my_available_moves = available_moves game in
+  List.filter my_available_moves ~f:(fun position ->
+      let potential_board = Map.add_exn game.board ~key:position ~data:me in
+      let opps_winning_moves =
+        winning_moves ~me:(Piece.flip me)
+          { game_kind = game.game_kind; board = potential_board }
+      in
+      not (List.is_empty opps_winning_moves))
+
+let%expect_test "losing_moves_non_win" =
+  let losing_moves = losing_moves ~me:X non_win in
+  List.iter losing_moves ~f:(fun position ->
+      print_endline (Position.to_string position));
+  [%expect {|
+  |}];
+  return ()
+
+let%expect_test "losing_moves_win_for_x" =
+  let losing_moves = losing_moves ~me:X win_for_x in
+  List.iter losing_moves ~f:(fun position ->
+      print_endline (Position.to_string position));
+  [%expect {|
+  |}];
+  return ()
 
 let exercise_one =
   Command.async ~summary:"Exercise 1: Where can I move?"
@@ -243,6 +288,16 @@ let command =
 
 (* Exercise 5 *)
 let make_move ~(game : Game.t) ~(you_play : Piece.t) : Position.t =
-  ignore game;
-  ignore you_play;
-  failwith "Implement me!"
+  match winning_moves ~me:you_play game with
+  | position :: _ -> position
+  | [] -> (
+      let potential_good_moves =
+        List.filter (available_moves game) ~f:(fun position ->
+            not
+              (List.mem
+                 (losing_moves ~me:you_play game)
+                 position ~equal:Position.equal))
+      in
+      match potential_good_moves with
+      | position :: _ -> position
+      | [] -> List.random_element_exn (available_moves game))
