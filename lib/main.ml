@@ -29,6 +29,16 @@ let non_win =
       ({ row = 2; column = 0 }, O);
     ]
 
+let block_x_win =
+  init_game
+    [
+      ({ row = 0; column = 0 }, X);
+      ({ row = 1; column = 0 }, O);
+      ({ row = 2; column = 2 }, X);
+      ({ row = 2; column = 0 }, O);
+      ({ row = 1; column = 1 }, O);
+    ]
+
 let print_game (game : Game.t) =
   let board_length = Game_kind.board_length game.game_kind in
   let pieces_list = Game.get_2D_piece_list game in
@@ -71,6 +81,18 @@ let%expect_test "print_non_win" =
       |}];
   return ()
 
+let%expect_test "print_block_x_win" =
+  print_game block_x_win;
+  [%expect
+    {|
+      X |   |
+      ---------
+      O | O |
+      ---------
+      O |   | X
+      |}];
+  return ()
+
 (* Exercise 1 *)
 let available_moves (game : Game.t) : Position.t list =
   (* let board_length = Game_kind.board_length game.game_kind in *)
@@ -107,17 +129,34 @@ let%expect_test "available_moves_non_win" =
   |}];
   return ()
 
-let get_next_piece (game : Game.t) direction position =
-  let win_length = Game_kind.win_length game.game_kind in
-  List.init win_length ~f:(fun until_win ->
-      let rec move_in dir posn until_win =
-        if Int.equal until_win 0 then posn
-        else move_in dir (dir posn) (until_win - 1)
-      in
-      let new_posn = move_in direction position until_win in
-      Map.find game.board new_posn)
+let rec check_next_pieces (game : Game.t) (direction : Position.t -> Position.t)
+    position (until_win : int) ~original_piece (cur_piece : Piece.t)
+    ~(eval : Evaluation.t) : Evaluation.t =
+  match until_win < 1 with
+  | true -> Game_continues
+  | false -> (
+      match until_win = 1 && Piece.equal original_piece cur_piece with
+      | true -> Game_over { winner = Some original_piece }
+      | false -> (
+          match eval with
+          | Illegal_move -> failwith "Illegal moves should not be checked"
+          | Game_over piece -> Game_over piece
+          | Game_continues -> (
+              let new_position = direction position in
+              match
+                Piece.equal cur_piece original_piece
+                && Map.mem game.board new_position
+              with
+              | false ->
+                  check_next_pieces game direction position Int.min_value
+                    ~original_piece cur_piece ~eval:Game_continues
+              | true ->
+                  check_next_pieces game direction new_position (until_win - 1)
+                    ~original_piece
+                    (Map.find_exn game.board new_position)
+                    ~eval:Game_continues)))
 
-let check_directions (game : Game.t) position (cur_piece : Piece.t) :
+let check_directions (game : Game.t) position (cur_piece : Piece.t) length :
     Evaluation.t =
   List.fold Position.some_offsets
     ~init:(Game_continues : Evaluation.t)
@@ -125,19 +164,9 @@ let check_directions (game : Game.t) position (cur_piece : Piece.t) :
       match eval with
       | Illegal_move -> Illegal_move
       | Game_over piece -> Game_over piece
-      | Game_continues -> (
-          match Position.in_bounds position ~game_kind:game.game_kind with
-          | false -> Illegal_move
-          | true -> (
-              let next_pieces = get_next_piece game direction position in
-              match
-                List.for_all next_pieces ~f:(fun next_piece ->
-                    match next_piece with
-                    | None -> false
-                    | Some nxt_piece -> Piece.equal nxt_piece cur_piece)
-              with
-              | true -> Game_over { winner = Some cur_piece }
-              | false -> Game_continues)))
+      | Game_continues ->
+          check_next_pieces game direction position length
+            ~original_piece:cur_piece cur_piece ~eval:Game_continues)
 
 (* Exercise 2 *)
 let evaluate (game : Game.t) : Evaluation.t =
@@ -148,7 +177,12 @@ let evaluate (game : Game.t) : Evaluation.t =
         match game_eval with
         | Illegal_move -> Illegal_move
         | Game_over piece -> Game_over piece
-        | Game_continues -> check_directions game position piece)
+        | Game_continues -> (
+            match Position.in_bounds position ~game_kind:game.game_kind with
+            | false -> Illegal_move
+            | true ->
+                check_directions game position piece
+                  (Game_kind.win_length game.game_kind)))
   in
 
   match
@@ -159,6 +193,14 @@ let evaluate (game : Game.t) : Evaluation.t =
       | Game_continues -> Game_over { winner = None }
       | Illegal_move | Game_over _ -> result)
   | false -> result
+
+let%expect_test "evaluate_block_x_win" =
+  let is_over = evaluate block_x_win in
+  print_s (Evaluation.sexp_of_t is_over);
+  [%expect {|
+    Game_continues
+  |}];
+  return ()
 
 let%expect_test "evaluate_non_win" =
   let is_over = evaluate non_win in
@@ -286,18 +328,74 @@ let command =
       ("four", exercise_four);
     ]
 
+(* Exercise 6 *)
+let available_moves_that_do_not_immediately_lose ~(me : Piece.t) (game : Game.t)
+    : Position.t list =
+  List.filter (available_moves game) ~f:(fun position ->
+      not (List.mem (losing_moves ~me game) position ~equal:Position.equal))
+
+(* let other_eval (game : Game.t) : Evaluation.t =
+  let result =
+    Map.fold game.board
+      ~init:(Game_continues : Evaluation.t)
+      ~f:(fun ~key:position ~data:piece game_eval ->
+        match game_eval with
+        | Illegal_move -> Illegal_move
+        | Game_over piece -> Game_over piece
+        | Game_continues -> (
+            match Position.in_bounds position ~game_kind:game.game_kind with
+            | false -> Illegal_move
+            | true -> check_directions game position piece 2))
+  in
+
+  match
+    Int.equal (Map.length game.board) (Game_kind.board_size game.game_kind)
+  with
+  | true -> (
+      match result with
+      | Game_continues -> Game_over { winner = None }
+      | Illegal_move | Game_over _ -> result)
+  | false -> result
+
+let move_to_defend game ~(me : Piece.t) : Position.t list =
+  let available_moves = available_moves game in
+  List.filter available_moves ~f:(fun position ->
+      let potential_board = Map.add_exn game.board ~key:position ~data:me in
+      match
+        other_eval { game_kind = game.game_kind; board = potential_board }
+      with
+      | Illegal_move -> false
+      | Game_continues -> true
+      | Game_over { winner = piece } -> (
+          match piece with None -> true | Some piece -> Piece.equal me piece)) *)
+
+let move_to_defend game ~(me : Piece.t) = winning_moves ~me:(Piece.flip me) game
+
 (* Exercise 5 *)
 let make_move ~(game : Game.t) ~(you_play : Piece.t) : Position.t =
-  match winning_moves ~me:you_play game with
-  | position :: _ -> position
-  | [] -> (
-      let potential_good_moves =
-        List.filter (available_moves game) ~f:(fun position ->
-            not
-              (List.mem
-                 (losing_moves ~me:you_play game)
-                 position ~equal:Position.equal))
-      in
-      match potential_good_moves with
-      | position :: _ -> position
-      | [] -> List.random_element_exn (available_moves game))
+  let defense = move_to_defend game ~me:you_play in
+  let moves_w = winning_moves game ~me:you_play in
+  let potential_good_moves =
+    available_moves_that_do_not_immediately_lose ~me:you_play game
+  in
+  (* let moves_l = losing_moves game ~me:you_play in *)
+
+  let position =
+    if not (List.length moves_w = 0) then List.random_element_exn moves_w
+    else if not (List.length defense = 0) then List.random_element_exn defense
+    else if not (List.length potential_good_moves = 0) then
+      List.random_element_exn potential_good_moves
+    else List.random_element_exn (available_moves game)
+  in
+
+  print_endline (Position.to_string position);
+
+  position
+
+let%expect_test "make_move" =
+  let move = make_move ~game:non_win ~you_play:O in
+  print_endline (Position.to_string move);
+  [%expect {|
+  ((row 1) (column 1))
+  |}];
+  return ()

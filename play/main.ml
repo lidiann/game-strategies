@@ -135,7 +135,7 @@ let start_game_command =
      and omok = flag "omok" no_arg ~doc:"_ play Omok instead of Tic Tac Toe"
      and move_timeout =
        flag_optional_with_default_doc "move-timeout" Time_ns.Span.arg_type
-         [%sexp_of: Time_ns.Span.t] ~default:(Time_ns.Span.of_sec 100.)
+         [%sexp_of: Time_ns.Span.t] ~default:(Time_ns.Span.of_sec 30.)
          ~doc:"SPAN time allowed for each move (e.g. 10s, 1m30s, etc.)"
      in
      fun () ->
