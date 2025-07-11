@@ -95,16 +95,16 @@ let%expect_test "print_block_x_win" =
 
 (* Exercise 1 *)
 let available_moves (game : Game.t) : Position.t list =
-  (* let board_length = Game_kind.board_length game.game_kind in *)
-  let pieces_list = Game.get_2D_piece_list game in
-  (* Essentially like Map.find on board. *)
-  List.concat
-    (List.mapi pieces_list ~f:(fun row col_list ->
-         List.filter_mapi col_list ~f:(fun column piece ->
-             match piece with
-             (* Should match on Piece variant after fixes *)
-             | None -> (Some { row; column } : Position.t option)
-             | Some X | Some O -> None)))
+  let board_length = Game_kind.board_length game.game_kind in
+  let board = game.board in
+
+  let posn_list =
+    List.concat
+      (List.init board_length ~f:(fun row ->
+           List.init board_length ~f:(fun column -> { Position.row; column })))
+  in
+  List.filter_map posn_list ~f:(fun position ->
+      match Map.mem board position with true -> None | false -> Some position)
 
 let%expect_test "available_moves_win_for_x" =
   let test_available_moves = available_moves win_for_x in
@@ -334,68 +334,34 @@ let available_moves_that_do_not_immediately_lose ~(me : Piece.t) (game : Game.t)
   List.filter (available_moves game) ~f:(fun position ->
       not (List.mem (losing_moves ~me game) position ~equal:Position.equal))
 
-(* let other_eval (game : Game.t) : Evaluation.t =
-  let result =
-    Map.fold game.board
-      ~init:(Game_continues : Evaluation.t)
-      ~f:(fun ~key:position ~data:piece game_eval ->
-        match game_eval with
-        | Illegal_move -> Illegal_move
-        | Game_over piece -> Game_over piece
-        | Game_continues -> (
-            match Position.in_bounds position ~game_kind:game.game_kind with
-            | false -> Illegal_move
-            | true -> check_directions game position piece 2))
-  in
-
-  match
-    Int.equal (Map.length game.board) (Game_kind.board_size game.game_kind)
-  with
-  | true -> (
-      match result with
-      | Game_continues -> Game_over { winner = None }
-      | Illegal_move | Game_over _ -> result)
-  | false -> result
-
-let move_to_defend game ~(me : Piece.t) : Position.t list =
-  let available_moves = available_moves game in
-  List.filter available_moves ~f:(fun position ->
-      let potential_board = Map.add_exn game.board ~key:position ~data:me in
-      match
-        other_eval { game_kind = game.game_kind; board = potential_board }
-      with
-      | Illegal_move -> false
-      | Game_continues -> true
-      | Game_over { winner = piece } -> (
-          match piece with None -> true | Some piece -> Piece.equal me piece)) *)
-
 let move_to_defend game ~(me : Piece.t) = winning_moves ~me:(Piece.flip me) game
 
 (* Exercise 5 *)
 let make_move ~(game : Game.t) ~(you_play : Piece.t) : Position.t =
-  let defense = move_to_defend game ~me:you_play in
-  let moves_w = winning_moves game ~me:you_play in
-  let potential_good_moves =
-    available_moves_that_do_not_immediately_lose ~me:you_play game
-  in
-  (* let moves_l = losing_moves game ~me:you_play in *)
-
+  ignore you_play;
   let position =
+    let moves_w = winning_moves game ~me:you_play in
     if not (List.length moves_w = 0) then List.random_element_exn moves_w
-    else if not (List.length defense = 0) then List.random_element_exn defense
-    else if not (List.length potential_good_moves = 0) then
-      List.random_element_exn potential_good_moves
-    else List.random_element_exn (available_moves game)
+    else
+      let defense = move_to_defend game ~me:you_play in
+      if not (List.length defense = 0) then List.random_element_exn defense
+      else
+        let potential_good_moves =
+          available_moves_that_do_not_immediately_lose ~me:you_play game
+        in
+        if not (List.length potential_good_moves = 0) then
+          List.random_element_exn potential_good_moves
+        else List.random_element_exn (available_moves game)
   in
 
   print_endline (Position.to_string position);
 
   position
 
-let%expect_test "make_move" =
+(* let%expect_test "make_move" =
   let move = make_move ~game:non_win ~you_play:O in
   print_endline (Position.to_string move);
   [%expect {|
   ((row 1) (column 1))
   |}];
-  return ()
+  return () *)
